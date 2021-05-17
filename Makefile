@@ -1,19 +1,20 @@
+# based on https://github.com/libbpf/libbpf-bootstrap/blob/edb6be548842bd34ed73ff4bf687d50975a8d175/examples/c/Makefile
+# with some minor changes
 # SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 OUTPUT := .output
 CLANG ?= clang
 LLVM_STRIP ?= llvm-strip
-BPFTOOL ?= $(abspath ../../tools/bpftool)
-LIBBPF_SRC := $(abspath ../../libbpf/src)
+BPFTOOL ?= bpftool
+LIBBPF_SRC := $(abspath libbpf/src)
 LIBBPF_OBJ := $(abspath $(OUTPUT)/libbpf.a)
-VMLINUX := ../../vmlinux/vmlinux.h
 # Use our own libbpf API headers and Linux UAPI headers distributed with
 # libbpf to avoid dependency on system-wide headers, which could be missing or
 # outdated
-INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
+INCLUDES := -I$(OUTPUT) -Ilibbpf/include/uapi
 CFLAGS := -g -Wall
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
-APPS = minimal bootstrap uprobe kprobe fentry
+APPS = get_fs_offset
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
 # to the includes list when compiling with `-target bpf` because otherwise some
@@ -86,4 +87,3 @@ $(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT)
 
 # keep intermediate (.skel.h, .bpf.o, etc) targets
 .SECONDARY:
-
