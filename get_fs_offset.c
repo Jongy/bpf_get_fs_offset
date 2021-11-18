@@ -38,7 +38,7 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va
     return vfprintf(stderr, format, args);
 }
 
-int main(void) {
+int main(int argc, const char *argv[]) {
     // at first I tried using ARCH_SET_FS to some arbitrary value which the BPF program will expect,
     // but it messes up with glibc (quite expectedly...)
     // so we'll use its real value instead.
@@ -48,7 +48,9 @@ int main(void) {
         return 1;
     }
 
-    libbpf_set_print(libbpf_print_fn);
+    if (argc > 1 && strcmp(argv[1], "--verbose") == 0) {
+        libbpf_set_print(libbpf_print_fn);
+    }
 
     struct get_fs_offset_bpf *obj = get_fs_offset_bpf__open();
     if (!obj) {
@@ -89,7 +91,7 @@ int main(void) {
 
     switch (output.status) {
     case STATUS_OK:
-        printf("fs offset: %u\n", output.offset);
+        printf("%u\n", output.offset);
         break;
 
     case STATUS_ERROR:
