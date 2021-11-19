@@ -95,15 +95,18 @@ int main(int argc, const char *argv[]) {
         break;
 
     case STATUS_ERROR:
-        printf("had an error: %d\n", (int)output.offset);
+        fprintf(stderr, "had an error: %d\n", (int)output.offset);
+        err = 1;
         break;
 
     case STATUS_NOTFOUND:
-        printf("fs not found, searched for %u bytes into task_struct\n", MAX_TASK_STRUCT);
+        fprintf(stderr, "fs not found, searched for %u bytes into task_struct\n", MAX_TASK_STRUCT);
+        err = 1;
         break;
 
     case STATUS_DUP:
-        printf("found multiple matching offsets!\n");
+        fprintf(stderr, "found multiple matching offsets!\n");
+        err = 1;
         break;
     }
 
