@@ -29,10 +29,6 @@
 #include "get_fs_offset.h"
 
 
-// set by our driver
-__u32 expected_tid = 0;
-__u64 expected_fs = 0;
-
 // key - zero
 // value - struct output
 struct {
@@ -42,13 +38,24 @@ struct {
     __type(value, struct output);
 } output SEC(".maps");
 
+// key - tid
+// value - expected fs
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u64);
+} tid_to_fs SEC(".maps");
+
 SEC("tp/syscalls/sys_enter_arch_prctl")
 int do_arch_prctl(struct pt_regs *ctx)
 {
     const __u32 tid = (__u32)bpf_get_current_pid_tgid();
-    if (tid != expected_tid) {
+    __u64 *expected_fs_ptr = bpf_map_lookup_elem(&tid_to_fs, &tid);
+    if (expected_fs_ptr == NULL) {
         return 0;
     }
+    __u64 expected_fs = *expected_fs_ptr;
 
     struct output out;
     out.offset = 0;

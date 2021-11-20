@@ -30,6 +30,7 @@
 #include <errno.h>
 
 #include <bpf/libbpf.h>
+#include <bpf/bpf.h>
 #include "get_fs_offset.skel.h"
 #include "get_fs_offset.h"
 
@@ -58,9 +59,6 @@ int main(int argc, const char *argv[]) {
         return 1;
     }
 
-    obj->bss->expected_tid = syscall(__NR_gettid);
-    obj->bss->expected_fs = fs;
-
     int err = get_fs_offset_bpf__load(obj);
     if (err) {
         fprintf(stderr, "failed to load BPF object: %d\n", err);
@@ -73,6 +71,13 @@ int main(int argc, const char *argv[]) {
         goto out;
     }
 
+    const __u32 tid = syscall(__NR_gettid);
+    int tid_to_fs_fd = bpf_map__fd(obj->maps.tid_to_fs);
+    if ((err = bpf_map_update_elem(tid_to_fs_fd, &tid, &fs, BPF_NOEXIST)) < 0) {
+        fprintf(stderr, "failed to insert TID entry: %d\n", err);
+        goto out;
+    }
+
     // call it again - we've just attached to the tracepoint on this function.
     // it's used as a mere trigger.
     err = syscall(__NR_arch_prctl, ARCH_GET_FS, &fs);
@@ -81,10 +86,10 @@ int main(int argc, const char *argv[]) {
         goto out;
     }
 
-    int fd = bpf_map__fd(obj->maps.output);
+    int output_fd = bpf_map__fd(obj->maps.output);
     const __u8 zero = 0;
     struct output output;
-    if ((err = bpf_map_lookup_elem(fd, &zero, &output)) < 0) {
+    if ((err = bpf_map_lookup_elem(output_fd, &zero, &output)) < 0) {
         fprintf(stderr, "failed to lookup output map: %d\n", err);
         goto out;
     }
