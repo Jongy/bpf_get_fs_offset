@@ -78,6 +78,14 @@ int main(int argc, const char *argv[]) {
         goto out;
     }
 
+    const __u32 zero = 0;
+    int progs_fd = bpf_map__fd(obj->maps.progs);
+    __u32 prog_fd = bpf_program__fd(obj->progs.do_arch_prctl);
+    if ((err = bpf_map_update_elem(progs_fd, &zero, &prog_fd, BPF_ANY)) < 0) {
+        fprintf(stderr, "failed to insert program entry: %d (prog fd: %d)\n", err, prog_fd);
+        goto out;
+    }
+
     // call it again - we've just attached to the tracepoint on this function.
     // it's used as a mere trigger.
     err = syscall(__NR_arch_prctl, ARCH_GET_FS, &fs);
@@ -87,7 +95,6 @@ int main(int argc, const char *argv[]) {
     }
 
     int output_fd = bpf_map__fd(obj->maps.output);
-    const __u8 zero = 0;
     struct output output;
     if ((err = bpf_map_lookup_elem(output_fd, &zero, &output)) < 0) {
         fprintf(stderr, "failed to lookup output map: %d\n", err);

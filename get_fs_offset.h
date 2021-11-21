@@ -27,7 +27,9 @@
 
 #include <linux/types.h>
 
-#define MAX_TASK_STRUCT 0x2000  // chosen arbitrarily, I think it'll be enough
+// chosen arbitrarily, I think it'll be enough
+// on 4.14 I needed > 0x2000
+#define MAX_TASK_STRUCT 0x4000
 
 #define STATUS_OK 0
 #define STATUS_ERROR 1
