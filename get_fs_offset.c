@@ -22,8 +22,12 @@
  * THE SOFTWARE.
  */
 
+#ifdef __x86_64__
 #include <asm/prctl.h>
 #include <sys/prctl.h>
+#endif
+
+#include <pthread.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -39,20 +43,27 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va
     return vfprintf(stderr, format, args);
 }
 
-int main(int argc, const char *argv[]) {
+static __u64 get_tls_base(void) {
+    __u64 fs;
+
+#ifdef __x86_64__
     // at first I tried using ARCH_SET_FS to some arbitrary value which the BPF program will expect,
     // but it messes up with glibc (quite expectedly...)
     // so we'll use its real value instead.
-    __u64 fs;
     if (syscall(__NR_arch_prctl, ARCH_GET_FS, &fs)) {
         fprintf(stderr, "failed to arch_prctl(ARCH_GET_FS): %d\n", errno);
         return 1;
     }
+#elif defined(__aarch64__)
+    __asm__ ("mrs %0,tpidr_el0" : "=r"(fs));
+#else
+#error "unknown arch"
+#endif
 
-    if (argc > 1 && strcmp(argv[1], "--verbose") == 0) {
-        libbpf_set_print(libbpf_print_fn);
-    }
+    return fs;
+}
 
+static int thread_func(void) {
     struct get_fs_offset_bpf *obj = get_fs_offset_bpf__open();
     if (!obj) {
         fprintf(stderr, "failed to open BPF object\n");
@@ -71,6 +82,8 @@ int main(int argc, const char *argv[]) {
         goto out;
     }
 
+    const __u64 fs = get_tls_base();
+
     const __u32 tid = syscall(__NR_gettid);
     int tid_to_fs_fd = bpf_map__fd(obj->maps.tid_to_fs);
     if ((err = bpf_map_update_elem(tid_to_fs_fd, &tid, &fs, BPF_NOEXIST)) < 0) {
@@ -80,19 +93,14 @@ int main(int argc, const char *argv[]) {
 
     const __u32 zero = 0;
     int progs_fd = bpf_map__fd(obj->maps.progs);
-    __u32 prog_fd = bpf_program__fd(obj->progs.do_arch_prctl);
+    __u32 prog_fd = bpf_program__fd(obj->progs.trigger);
     if ((err = bpf_map_update_elem(progs_fd, &zero, &prog_fd, BPF_ANY)) < 0) {
         fprintf(stderr, "failed to insert program entry: %d (prog fd: %d)\n", err, prog_fd);
         goto out;
     }
 
-    // call it again - we've just attached to the tracepoint on this function.
-    // it's used as a mere trigger.
-    err = syscall(__NR_arch_prctl, ARCH_GET_FS, &fs);
-    if (err) {
-        fprintf(stderr, "failed to arch_prctl(ARCH_GET_FS) the 2nd time: %d\n", errno);
-        goto out;
-    }
+    // trigger the bpf program - we've just attached to the tracepoint on this function.
+    (void)syscall(__NR_close, -1);
 
     int output_fd = bpf_map__fd(obj->maps.output);
     struct output output;
@@ -120,9 +128,30 @@ int main(int argc, const char *argv[]) {
         fprintf(stderr, "found multiple matching offsets!\n");
         err = 1;
         break;
+
+    default:
+        fprintf(stderr, "unknwon status %d\n", output.status);
+        err = 1;
+        break;
     }
 
 out:
     get_fs_offset_bpf__destroy(obj);
     return err != 0;
+}
+
+int main(int argc, const char *argv[]) {
+    if (argc > 1 && strcmp(argv[1], "--verbose") == 0) {
+        libbpf_set_print(libbpf_print_fn);
+    }
+
+    // on Aarch64, the TLS value (as read by get_tls_base()) appears to be inconsistent
+    // on the main thread. that is, if thread_func() is ran on the main thread, it works non
+    // deterministically, as if something is messing with the TLS value of the main thread?
+    // on a spawned thread it works determinstically, so meh.
+    pthread_t thread;
+    int ret;
+    pthread_create(&thread, NULL, (void*(*)(void*))thread_func, NULL);
+    pthread_join(thread, (void**)&ret);
+    return ret;
 }

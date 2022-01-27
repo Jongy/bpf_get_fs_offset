@@ -10,10 +10,16 @@ It was also my first libbpf-based program, so I took it as a fun training :)
 
 The driver program reads its thread's `fs` value, sets it as the expected value for the BPF program, and loads it.
 
-The BPF program is triggered (by the "arbitrary" tracepoint on `arch_prctl`). It scans the current `task_struct`'s memory for 16kb, finding pointers that match the expected `fs` value.
+The BPF program is triggered (by the "arbitrary" tracepoint on `close`). It scans the current `task_struct`'s memory for 16kb, finding pointers that match the expected `fs` value.
 
 The driver then reports the found offset, or the error (none found / found more than 1 / `bpf_probe_read` error).
 
+#### Aarch64 support
+
+It works for Aarch64 as well, although there it actually scans for `task_struct->thread.tp_value`, but I still use the `fs` notation :shrug:
+
 ### Tested versions
 
-Some kernels from 4.14 to 5.11.
+x86_64: Some kernels from 4.14 to 5.11.
+
+Aarch64: 5.13

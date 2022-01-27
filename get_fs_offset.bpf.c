@@ -29,7 +29,7 @@
 #include "get_fs_offset.h"
 
 
-#define NUM_TAIL_CALLS 16
+#define NUM_TAIL_CALLS 32
 #define TOTAL_ITERS (MAX_TASK_STRUCT / sizeof(__u64))
 #define ITERS_PER_PROG (TOTAL_ITERS / NUM_TAIL_CALLS)
 
@@ -69,8 +69,8 @@ struct {
    __type(value, __u32);
 } progs SEC(".maps");
 
-SEC("tp/syscalls/sys_enter_arch_prctl")
-int do_arch_prctl(struct pt_regs *ctx)
+SEC("tp/syscalls/sys_enter_close")
+int trigger(struct pt_regs *ctx)
 {
     const __u32 tid = (__u32)bpf_get_current_pid_tgid();
     __u64 *expected_fs_ptr = bpf_map_lookup_elem(&tid_to_fs, &tid);
